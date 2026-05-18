@@ -3,6 +3,9 @@ set -eu
 
 REPO="LynkTechnology/MeetHermesRelease"
 PACKAGE="hermes-platform-meet"
+PLUGIN_NAME="meet-platform"
+HERMES_HOME_DIR="${HERMES_HOME:-${HOME}/.hermes}"
+PLUGIN_DIR="${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"
 WORKDIR="${TMPDIR:-/tmp}/meet-hermes-install.$$"
 VERSION="${1:-}"
 CURL_RETRY_OPTS="--retry 3 --retry-delay 2 --connect-timeout 20 --max-time 300"
@@ -110,6 +113,36 @@ if not plugins:
 PY
 }
 
+install_hermes_directory_plugin() {
+  "$PYTHON" - "$PLUGIN_WHEEL" "$PLUGIN_DIR" "$TARGET_VERSION" <<'PY'
+import shutil
+import sys
+import zipfile
+from pathlib import Path
+
+wheel = Path(sys.argv[1])
+plugin_dir = Path(sys.argv[2])
+version = sys.argv[3]
+
+plugin_dir.parent.mkdir(parents=True, exist_ok=True)
+if plugin_dir.exists():
+    shutil.rmtree(plugin_dir)
+plugin_dir.mkdir(parents=True)
+
+with zipfile.ZipFile(wheel) as archive:
+    manifest = archive.read("hermes_platform_meet/plugin.yaml").decode("utf-8")
+
+plugin_dir.joinpath("plugin.yaml").write_text(manifest, encoding="utf-8")
+plugin_dir.joinpath("__init__.py").write_text(
+    "from __future__ import annotations\n\n"
+    "from hermes_platform_meet import check_requirements, register\n\n"
+    "__all__ = [\"check_requirements\", \"register\"]\n",
+    encoding="utf-8",
+)
+plugin_dir.joinpath("VERSION").write_text(f"{version}\n", encoding="utf-8")
+PY
+}
+
 if [ -n "$VERSION" ]; then
   TAG="$(normalize_tag "$VERSION")"
 else
@@ -165,16 +198,17 @@ else
   log "pip is unavailable; installing wheels with Python zip extraction."
   install_wheels_with_python
 fi
+install_hermes_directory_plugin
 
 if command -v hermes >/dev/null 2>&1; then
-  hermes plugins enable meet || true
+  hermes plugins enable "$PLUGIN_NAME"
   if [ "${MEET_HERMES_RESTART_GATEWAY:-0}" = "1" ]; then
     hermes gateway restart || true
   else
     log "Restart the Hermes gateway to activate MeetHermes: hermes gateway restart"
   fi
 else
-  log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes plugins enable meet"
+  log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes plugins enable ${PLUGIN_NAME}"
 fi
 
 log "MeetHermes ${TARGET_VERSION} installed."

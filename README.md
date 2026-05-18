@@ -26,7 +26,8 @@ The installer:
 - verifies the `.sha256` checksum
 - installs `meet-python-sdk` and `hermes-platform-meet` from the local wheelhouse without PyPI
 - falls back to direct wheel extraction when the selected Python environment does not provide `pip`
-- enables the `meet` plugin when `hermes` is available and prints the gateway restart command
+- installs a Hermes directory plugin shim at `$HOME/.hermes/plugins/meet-platform`
+- enables the `meet-platform` plugin when `hermes` is available and prints the gateway restart command
 - defaults to the latest release when no version is provided
 - upgrades an existing installation when the installed version is not the latest
 
@@ -104,6 +105,23 @@ For locked-down environments, download the release assets in a browser, then run
 shasum -a 256 -c meet-hermes-wheelhouse-v2026.5.18.sha256
 tar -xzf meet-hermes-wheelhouse-v2026.5.18.tar.gz
 python3 -m pip install --no-index --no-deps --upgrade wheelhouse/meet_python_sdk-*.whl wheelhouse/hermes_platform_meet-*.whl
-hermes plugins enable meet
+mkdir -p ~/.hermes/plugins/meet-platform
+python3 - <<'PY'
+from pathlib import Path
+import zipfile
+
+plugin_dir = Path.home() / ".hermes/plugins/meet-platform"
+wheel = sorted(Path("wheelhouse").glob("hermes_platform_meet-*.whl"))[-1]
+with zipfile.ZipFile(wheel) as archive:
+    plugin_dir.joinpath("plugin.yaml").write_text(
+        archive.read("hermes_platform_meet/plugin.yaml").decode("utf-8"),
+        encoding="utf-8",
+    )
+plugin_dir.joinpath("__init__.py").write_text(
+    "from hermes_platform_meet import check_requirements, register\n",
+    encoding="utf-8",
+)
+PY
+hermes plugins enable meet-platform
 hermes gateway restart
 ```
