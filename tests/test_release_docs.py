@@ -20,6 +20,16 @@ def test_install_script_supports_curl_latest_and_versioned_install():
     assert "hermes gateway restart" in text
 
 
+def test_install_script_prefers_hermes_agent_venv_python():
+    text = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+    assert 'HERMES_AGENT_PYTHON="${HOME}/.hermes/hermes-agent/venv/bin/python3"' in text
+    assert 'if [ -n "${MEET_HERMES_PYTHON:-}" ]; then' in text
+    assert 'elif [ -x "$HERMES_AGENT_PYTHON" ]; then' in text
+    assert 'PYTHON="$HERMES_AGENT_PYTHON"' in text
+    assert 'PYTHON="python3"' in text
+
+
 def test_readme_uses_curl_installer_instead_of_gh_download_flow():
     text = (ROOT / "README.md").read_text(encoding="utf-8")
 
@@ -29,4 +39,5 @@ def test_readme_uses_curl_installer_instead_of_gh_download_flow():
 
 if __name__ == "__main__":
     test_install_script_supports_curl_latest_and_versioned_install()
+    test_install_script_prefers_hermes_agent_venv_python()
     test_readme_uses_curl_installer_instead_of_gh_download_flow()

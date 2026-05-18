@@ -21,6 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/ma
 The installer:
 
 - requires `curl`, `python3`, `tar`, and `shasum` or `sha256sum`
+- prefers Hermes' agent virtualenv Python at `$HOME/.hermes/hermes-agent/venv/bin/python3` when available
 - downloads the wheelhouse archive from the selected GitHub Release
 - verifies the `.sha256` checksum
 - installs `meet-python-sdk` and `hermes-platform-meet` from the local wheelhouse without PyPI
@@ -30,7 +31,13 @@ The installer:
 
 To restart the gateway automatically after install, set `MEET_HERMES_RESTART_GATEWAY=1`.
 
-If Hermes runs from a virtualenv, either activate it first or pass its Python explicitly:
+If Hermes is installed in the standard agent virtualenv, no extra Python configuration is needed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh
+```
+
+For a non-standard Hermes virtualenv, either activate it first or pass its Python explicitly:
 
 ```bash
 source /path/to/hermes-venv/bin/activate

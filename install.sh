@@ -23,7 +23,14 @@ need_cmd() {
 }
 
 need_cmd curl "Please install curl first, then rerun this installer."
-PYTHON="${MEET_HERMES_PYTHON:-python3}"
+HERMES_AGENT_PYTHON="${HOME}/.hermes/hermes-agent/venv/bin/python3"
+if [ -n "${MEET_HERMES_PYTHON:-}" ]; then
+  PYTHON="$MEET_HERMES_PYTHON"
+elif [ -x "$HERMES_AGENT_PYTHON" ]; then
+  PYTHON="$HERMES_AGENT_PYTHON"
+else
+  PYTHON="python3"
+fi
 need_cmd "$PYTHON" "Please install Python 3.11+ first, then rerun this installer. Set MEET_HERMES_PYTHON=/path/to/python to install into a specific Hermes virtualenv."
 need_cmd tar "Please install tar first, then rerun this installer."
 
