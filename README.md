@@ -70,13 +70,13 @@ MEET_API_TOKEN=bot_id:secret
 Optional values:
 
 ```bash
-MEET_API_ENDPOINT=https://meet-api.miyachat.com
+MEET_API_ENDPOINT=https://meet-api.example.com
 MEET_HOME_CHANNEL=user:553
 MEET_ALLOWED_USERS=553,554
 MEET_ALLOW_ALL_USERS=false
 ```
 
-When `MEET_API_ENDPOINT` is not set, the plugin uses the staging endpoint `https://staging-meet-api.miyachat.com`. Set `MEET_API_ENDPOINT` explicitly to target a production deployment (for example `https://meet-api.miyachat.com`, `https://meet-api.yuanqiyun668.com`, or `https://meet-api.mecord668.com`).
+When `MEET_API_ENDPOINT` is not set, the plugin uses the staging endpoint `https://staging-meet-api.example.com`. Set `MEET_API_ENDPOINT` explicitly to target a production deployment (for example `https://meet-api.example.com`).
 
 ## Multiple Meet Accounts
 
@@ -88,7 +88,7 @@ hermes profile create meet-support --clone
 
 cat >> ~/.hermes/profiles/meet-sales/.env <<'ENV'
 MEET_API_TOKEN=10001:sales-secret
-MEET_API_ENDPOINT=https://meet-api.miyachat.com
+MEET_API_ENDPOINT=https://meet-api.example.com
 MEET_HOME_CHANNEL=channel:20001
 MEET_ALLOWED_USERS=553,554
 MEET_ALLOW_ALL_USERS=false
@@ -96,7 +96,7 @@ ENV
 
 cat >> ~/.hermes/profiles/meet-support/.env <<'ENV'
 MEET_API_TOKEN=10002:support-secret
-MEET_API_ENDPOINT=https://meet-api.yuanqiyun668.com
+MEET_API_ENDPOINT=https://meet-api.example.org
 MEET_HOME_CHANNEL=channel:30001
 MEET_ALLOWED_USERS=701,702
 MEET_ALLOW_ALL_USERS=false
