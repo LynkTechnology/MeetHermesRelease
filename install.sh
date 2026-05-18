@@ -3,7 +3,7 @@ set -eu
 
 REPO="LynkTechnology/MeetHermesRelease"
 PACKAGE="hermes-platform-meet"
-PLUGIN_NAME="meet-platform"
+PLUGIN_NAME="platforms/meet"
 HERMES_HOME_DIR="${HERMES_HOME:-${HOME}/.hermes}"
 PLUGIN_DIR="${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"
 WORKDIR="${TMPDIR:-/tmp}/meet-hermes-install.$$"
