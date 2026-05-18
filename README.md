@@ -4,35 +4,40 @@ Public release channel for the Meet Hermes plugin.
 
 This repository does not contain the private development source tree. It publishes release artifacts that can be installed without PyPI.
 
-## Install From a Release
+## Install
 
-Download the wheelhouse archive and checksum from the release page, or use GitHub CLI:
+Install or update to the latest release:
 
 ```bash
-gh release download v2026.5.18 \
-  --repo LynkTechnology/MeetHermesRelease \
-  --pattern 'meet-hermes-wheelhouse-*'
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh
 ```
 
-Verify the archive:
+Install a specific release:
 
 ```bash
-shasum -a 256 -c meet-hermes-wheelhouse-v2026.5.18.sha256
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- v2026.5.18
 ```
 
-Unpack and install into the same Python environment that runs Hermes:
+The installer:
+
+- requires `curl`, `python3`, `tar`, and `shasum` or `sha256sum`
+- downloads the wheelhouse archive from the selected GitHub Release
+- verifies the `.sha256` checksum
+- installs `meet-python-sdk` and `hermes-platform-meet` from the local wheelhouse without PyPI
+- enables the `meet` plugin when `hermes` is available and prints the gateway restart command
+- defaults to the latest release when no version is provided
+- upgrades an existing installation when the installed version is not the latest
+
+To restart the gateway automatically after install, set `MEET_HERMES_RESTART_GATEWAY=1`.
+
+If Hermes runs from a virtualenv, either activate it first or pass its Python explicitly:
 
 ```bash
-tar -xzf meet-hermes-wheelhouse-v2026.5.18.tar.gz
-python -m pip install --no-index --find-links wheelhouse hermes-platform-meet
-hermes plugins enable meet
-hermes gateway restart
-```
+source /path/to/hermes-venv/bin/activate
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh
 
-If Hermes runs from a virtualenv, use that virtualenv's Python:
-
-```bash
-/path/to/hermes-venv/bin/python -m pip install --no-index --find-links wheelhouse hermes-platform-meet
+# Or without activating:
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | MEET_HERMES_PYTHON=/path/to/hermes-venv/bin/python sh
 ```
 
 ## Configure
@@ -83,12 +88,14 @@ hermes --profile meet-support gateway restart
 
 Use a different `MEET_API_TOKEN` for each concurrently running gateway.
 
-## Upgrade
+## Manual Install
 
-Download the new release, verify it, then run:
+For locked-down environments, download the release assets in a browser, then run:
 
 ```bash
-tar -xzf meet-hermes-wheelhouse-v2026.5.19.tar.gz
-python -m pip install --no-index --find-links wheelhouse --upgrade hermes-platform-meet
+shasum -a 256 -c meet-hermes-wheelhouse-v2026.5.18.sha256
+tar -xzf meet-hermes-wheelhouse-v2026.5.18.tar.gz
+python3 -m pip install --no-index --no-deps --upgrade wheelhouse/meet_python_sdk-*.whl wheelhouse/hermes_platform_meet-*.whl
+hermes plugins enable meet
 hermes gateway restart
 ```
