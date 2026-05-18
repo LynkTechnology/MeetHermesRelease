@@ -25,6 +25,7 @@ The installer:
 - downloads the wheelhouse archive from the selected GitHub Release
 - verifies the `.sha256` checksum
 - installs `meet-python-sdk` and `hermes-platform-meet` from the local wheelhouse without PyPI
+- falls back to direct wheel extraction when the selected Python environment does not provide `pip`
 - enables the `meet` plugin when `hermes` is available and prints the gateway restart command
 - defaults to the latest release when no version is provided
 - upgrades an existing installation when the installed version is not the latest

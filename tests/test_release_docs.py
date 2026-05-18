@@ -30,6 +30,19 @@ def test_install_script_prefers_hermes_agent_venv_python():
     assert 'PYTHON="python3"' in text
 
 
+def test_install_script_supports_pipless_wheel_extraction():
+    text = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+    assert 'install_wheels_with_python()' in text
+    assert '"$PYTHON" -m pip --version' in text
+    assert 'pip is unavailable; installing wheels with Python zip extraction' in text
+    assert 'sysconfig.get_paths()["purelib"]' in text
+    assert 'zipfile.ZipFile(wheel)' in text
+    assert 'remove_existing("meet_sdk")' in text
+    assert 'remove_existing("hermes_platform_meet")' in text
+    assert 'hermes_agent.plugins' in text
+
+
 def test_readme_uses_curl_installer_instead_of_gh_download_flow():
     text = (ROOT / "README.md").read_text(encoding="utf-8")
 
@@ -40,4 +53,5 @@ def test_readme_uses_curl_installer_instead_of_gh_download_flow():
 if __name__ == "__main__":
     test_install_script_supports_curl_latest_and_versioned_install()
     test_install_script_prefers_hermes_agent_venv_python()
+    test_install_script_supports_pipless_wheel_extraction()
     test_readme_uses_curl_installer_instead_of_gh_download_flow()

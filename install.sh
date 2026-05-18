@@ -64,6 +64,52 @@ except importlib.metadata.PackageNotFoundError:
 PY
 }
 
+install_wheels_with_python() {
+  "$PYTHON" - "$SDK_WHEEL" "$PLUGIN_WHEEL" <<'PY'
+import glob
+import shutil
+import sys
+import sysconfig
+import zipfile
+from pathlib import Path
+
+site_packages = Path(sysconfig.get_paths()["purelib"])
+site_packages.mkdir(parents=True, exist_ok=True)
+
+def remove_existing(name):
+    target = site_packages / name
+    if target.exists():
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+    for dist_info in glob.glob(str(site_packages / f"{name.replace('_', '-')}-*.dist-info")):
+        shutil.rmtree(dist_info, ignore_errors=True)
+    for dist_info in glob.glob(str(site_packages / f"{name}-*.dist-info")):
+        shutil.rmtree(dist_info, ignore_errors=True)
+
+remove_existing("meet_sdk")
+remove_existing("meet_python_sdk")
+remove_existing("hermes_platform_meet")
+
+for wheel in sys.argv[1:]:
+    with zipfile.ZipFile(wheel) as archive:
+        archive.extractall(site_packages)
+
+import importlib.metadata
+entry_points = importlib.metadata.entry_points()
+if hasattr(entry_points, "select"):
+    plugins = entry_points.select(group="hermes_agent.plugins", name="meet")
+else:
+    plugins = [
+        ep for ep in entry_points.get("hermes_agent.plugins", [])
+        if ep.name == "meet"
+    ]
+if not plugins:
+    raise SystemExit("Installed wheel metadata is missing hermes_agent.plugins entry point 'meet'.")
+PY
+}
+
 if [ -n "$VERSION" ]; then
   TAG="$(normalize_tag "$VERSION")"
 else
@@ -113,7 +159,12 @@ if [ -z "$SDK_WHEEL" ] || [ -z "$PLUGIN_WHEEL" ]; then
 fi
 
 log "Installing ${PACKAGE} ${TARGET_VERSION}..."
-"$PYTHON" -m pip install --no-index --no-deps --upgrade "$SDK_WHEEL" "$PLUGIN_WHEEL"
+if "$PYTHON" -m pip --version >/dev/null 2>&1; then
+  "$PYTHON" -m pip install --no-index --no-deps --upgrade "$SDK_WHEEL" "$PLUGIN_WHEEL"
+else
+  log "pip is unavailable; installing wheels with Python zip extraction."
+  install_wheels_with_python
+fi
 
 if command -v hermes >/dev/null 2>&1; then
   hermes plugins enable meet || true
