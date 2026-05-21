@@ -7,8 +7,33 @@ PLUGIN_NAME="platforms/meet"
 HERMES_HOME_DIR="${HERMES_HOME:-${HOME}/.hermes}"
 PLUGIN_DIR="${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"
 WORKDIR="${TMPDIR:-/tmp}/meet-hermes-install.$$"
-VERSION="${1:-}"
+VERSION=""
+PROFILE_NAME=""
+INSTALL_ALL_PROFILES="0"
+PROFILE_SCOPE_REQUESTED="0"
 CURL_RETRY_OPTS="--retry 3 --retry-delay 2 --connect-timeout 20 --max-time 300"
+
+usage() {
+  cat <<'EOF'
+Usage: install.sh [--profile <profile>|--all] [version]
+
+Install or update MeetHermes for the default Hermes profile, a named profile,
+or every profile including default.
+
+Options:
+  --profile <profile>  Install the plugin shim into one Hermes profile.
+                       Use "default" for the root Hermes home.
+  --all                Install the plugin shim into default and all profiles
+                       under $HERMES_HOME/profiles.
+  -h, --help           Show this help.
+
+Environment:
+  HERMES_HOME          Hermes home directory. Defaults to ~/.hermes.
+  MEET_HERMES_PYTHON  Python interpreter to install into. Defaults to
+                      ~/.hermes/hermes-agent/venv/bin/python3 when present,
+                      otherwise python3 from PATH.
+EOF
+}
 
 log() {
   printf '%s\n' "$*"
@@ -22,6 +47,65 @@ fail() {
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     fail "$2"
+  fi
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --profile)
+      if [ "$#" -lt 2 ] || [ "${2#-}" != "$2" ]; then
+        fail "--profile requires a profile name."
+      fi
+      PROFILE_NAME="$2"
+      shift 2
+      ;;
+    --all)
+      INSTALL_ALL_PROFILES="1"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      usage >&2
+      fail "Unknown argument: $1"
+      ;;
+    *)
+      if [ -n "$VERSION" ]; then
+        usage >&2
+        fail "Only one version may be provided."
+      fi
+      VERSION="$1"
+      shift
+      ;;
+  esac
+done
+
+if [ -n "$PROFILE_NAME" ] && [ "$INSTALL_ALL_PROFILES" = "1" ]; then
+  fail "--profile and --all cannot be used together."
+fi
+if [ -n "$PROFILE_NAME" ] || [ "$INSTALL_ALL_PROFILES" = "1" ]; then
+  PROFILE_SCOPE_REQUESTED="1"
+fi
+
+profile_plugin_dir() {
+  profile="$1"
+  if [ "$profile" = "default" ]; then
+    printf '%s\n' "${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"
+  else
+    printf '%s\n' "${HERMES_HOME_DIR}/profiles/${profile}/plugins/${PLUGIN_NAME}"
+  fi
+}
+
+profile_names() {
+  printf '%s\n' default
+  profiles_dir="${HERMES_HOME_DIR}/profiles"
+  if [ -d "$profiles_dir" ]; then
+    for profile_dir in "$profiles_dir"/*; do
+      [ -d "$profile_dir" ] || continue
+      printf '%s\n' "${profile_dir##*/}"
+    done
   fi
 }
 
@@ -114,7 +198,8 @@ PY
 }
 
 install_hermes_directory_plugin() {
-  "$PYTHON" - "$PLUGIN_WHEEL" "$PLUGIN_DIR" "$TARGET_VERSION" <<'PY'
+  target="$1"
+  "$PYTHON" - "$PLUGIN_WHEEL" "$target" "$TARGET_VERSION" <<'PY'
 import shutil
 import sys
 import zipfile
@@ -143,6 +228,45 @@ plugin_dir.joinpath("VERSION").write_text(f"{version}\n", encoding="utf-8")
 PY
 }
 
+enable_profile_plugin() {
+  profile="$1"
+  if command -v hermes >/dev/null 2>&1; then
+    if [ "$profile" = "default" ]; then
+      hermes plugins enable "$PLUGIN_NAME"
+    else
+      hermes --profile "$profile" plugins enable "$PLUGIN_NAME"
+    fi
+
+    if [ "${MEET_HERMES_RESTART_GATEWAY:-0}" = "1" ]; then
+      if [ "$profile" = "default" ]; then
+        hermes gateway restart || true
+      else
+        hermes --profile "$profile" gateway restart || true
+      fi
+    else
+      if [ "$profile" = "default" ]; then
+        log "Restart the Hermes gateway to activate MeetHermes: hermes gateway restart"
+      else
+        log "Restart the Hermes gateway to activate MeetHermes for profile ${profile}: hermes --profile ${profile} gateway restart"
+      fi
+    fi
+  else
+    if [ "$profile" = "default" ]; then
+      log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes plugins enable ${PLUGIN_NAME}"
+    else
+      log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes --profile ${profile} plugins enable ${PLUGIN_NAME}"
+    fi
+  fi
+}
+
+install_profile_plugin() {
+  profile="$1"
+  target="$(profile_plugin_dir "$profile")"
+  log "Installing Hermes directory plugin to ${target}..."
+  install_hermes_directory_plugin "$target"
+  enable_profile_plugin "$profile"
+}
+
 if [ -n "$VERSION" ]; then
   TAG="$(normalize_tag "$VERSION")"
 else
@@ -153,9 +277,11 @@ CURRENT_VERSION="$(installed_version)"
 
 if [ -n "$CURRENT_VERSION" ]; then
   if [ "$CURRENT_VERSION" = "$TARGET_VERSION" ]; then
-    log "MeetHermes ${CURRENT_VERSION} is already installed."
-    if [ -z "$VERSION" ]; then
+    if [ -z "$VERSION" ] && [ "$PROFILE_SCOPE_REQUESTED" = "0" ]; then
+      log "MeetHermes ${CURRENT_VERSION} is already installed."
       exit 0
+    else
+      log "MeetHermes ${CURRENT_VERSION} is already installed; installing profile plugin shim."
     fi
   elif [ -z "$VERSION" ]; then
     log "MeetHermes ${CURRENT_VERSION} is installed; updating to latest ${TARGET_VERSION}."
@@ -198,17 +324,12 @@ else
   log "pip is unavailable; installing wheels with Python zip extraction."
   install_wheels_with_python
 fi
-install_hermes_directory_plugin
-
-if command -v hermes >/dev/null 2>&1; then
-  hermes plugins enable "$PLUGIN_NAME"
-  if [ "${MEET_HERMES_RESTART_GATEWAY:-0}" = "1" ]; then
-    hermes gateway restart || true
-  else
-    log "Restart the Hermes gateway to activate MeetHermes: hermes gateway restart"
-  fi
+if [ "$INSTALL_ALL_PROFILES" = "1" ]; then
+  profile_names | while IFS= read -r profile; do
+    install_profile_plugin "$profile"
+  done
 else
-  log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes plugins enable ${PLUGIN_NAME}"
+  install_profile_plugin "${PROFILE_NAME:-default}"
 fi
 
 log "MeetHermes ${TARGET_VERSION} installed."
