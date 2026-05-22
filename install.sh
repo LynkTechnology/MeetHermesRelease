@@ -9,22 +9,20 @@ PLUGIN_DIR="${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"
 WORKDIR="${TMPDIR:-/tmp}/meet-hermes-install.$$"
 VERSION=""
 PROFILE_NAME=""
-INSTALL_ALL_PROFILES="0"
 PROFILE_SCOPE_REQUESTED="0"
 CURL_RETRY_OPTS="--retry 3 --retry-delay 2 --connect-timeout 20 --max-time 300"
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--profile <profile>|--all] [version]
+Usage: install.sh [--profile <profile>] [--all] [version]
 
-Install or update MeetHermes for the default Hermes profile, a named profile,
-or every profile including default.
+Install or update MeetHermes for every Hermes profile including default, or
+for one named profile when --profile is provided.
 
 Options:
   --profile <profile>  Install the plugin shim into one Hermes profile.
                        Use "default" for the root Hermes home.
-  --all                Install the plugin shim into default and all profiles
-                       under $HERMES_HOME/profiles.
+  --all                Compatibility option. This is now the default behavior.
   -h, --help           Show this help.
 
 Environment:
@@ -60,7 +58,6 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     --all)
-      INSTALL_ALL_PROFILES="1"
       shift
       ;;
     -h|--help)
@@ -82,10 +79,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -n "$PROFILE_NAME" ] && [ "$INSTALL_ALL_PROFILES" = "1" ]; then
-  fail "--profile and --all cannot be used together."
-fi
-if [ -n "$PROFILE_NAME" ] || [ "$INSTALL_ALL_PROFILES" = "1" ]; then
+if [ -n "$PROFILE_NAME" ]; then
   PROFILE_SCOPE_REQUESTED="1"
 fi
 
@@ -237,18 +231,16 @@ enable_profile_plugin() {
       hermes --profile "$profile" plugins enable "$PLUGIN_NAME"
     fi
 
-    if [ "${MEET_HERMES_RESTART_GATEWAY:-0}" = "1" ]; then
-      if [ "$profile" = "default" ]; then
-        hermes gateway restart || true
-      else
-        hermes --profile "$profile" gateway restart || true
-      fi
-    else
+    if [ "${MEET_HERMES_RESTART_GATEWAY:-1}" = "0" ]; then
       if [ "$profile" = "default" ]; then
         log "Restart the Hermes gateway to activate MeetHermes: hermes gateway restart"
       else
         log "Restart the Hermes gateway to activate MeetHermes for profile ${profile}: hermes --profile ${profile} gateway restart"
       fi
+    elif [ "$profile" = "default" ]; then
+      hermes gateway restart || true
+    else
+      hermes --profile "$profile" gateway restart || true
     fi
   else
     if [ "$profile" = "default" ]; then
@@ -277,7 +269,7 @@ CURRENT_VERSION="$(installed_version)"
 
 if [ -n "$CURRENT_VERSION" ]; then
   if [ "$CURRENT_VERSION" = "$TARGET_VERSION" ]; then
-    if [ -z "$VERSION" ] && [ "$PROFILE_SCOPE_REQUESTED" = "0" ]; then
+    if [ -z "$VERSION" ] && [ -n "$PROFILE_NAME" ]; then
       log "MeetHermes ${CURRENT_VERSION} is already installed."
       exit 0
     else
@@ -324,12 +316,12 @@ else
   log "pip is unavailable; installing wheels with Python zip extraction."
   install_wheels_with_python
 fi
-if [ "$INSTALL_ALL_PROFILES" = "1" ]; then
+if [ -n "$PROFILE_NAME" ]; then
+  install_profile_plugin "$PROFILE_NAME"
+else
   profile_names | while IFS= read -r profile; do
     install_profile_plugin "$profile"
   done
-else
-  install_profile_plugin "${PROFILE_NAME:-default}"
 fi
 
 log "MeetHermes ${TARGET_VERSION} installed."

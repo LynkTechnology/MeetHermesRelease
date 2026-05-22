@@ -6,28 +6,22 @@ This repository does not contain the private development source tree. It publish
 
 ## Install
 
-Install or update to the latest release:
+Install or update every Hermes profile, including `default`, to the latest release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh
 ```
 
-Install a specific release:
+Install every Hermes profile, including `default`, to a specific release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- v2026.5.18
 ```
 
-Install into a named Hermes profile:
+Install only into a named Hermes profile:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales
-```
-
-Install into every Hermes profile, including `default`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --all
 ```
 
 The installer:
@@ -39,12 +33,13 @@ The installer:
 - installs `meet-python-sdk` and `hermes-platform-meet` from the local wheelhouse without PyPI
 - falls back to direct wheel extraction when the selected Python environment does not provide `pip`
 - installs a Hermes directory plugin shim at `$HOME/.hermes/plugins/platforms/meet`
-- installs profile-specific shims at `$HOME/.hermes/profiles/<name>/plugins/platforms/meet` when `--profile <name>` or `--all` is used
-- enables the `platforms/meet` plugin when `hermes` is available and prints the gateway restart command
+- installs profile-specific shims at `$HOME/.hermes/profiles/<name>/plugins/platforms/meet` for every profile by default
+- installs only one profile shim when `--profile <name>` is used
+- enables the `platforms/meet` plugin when `hermes` is available and restarts the corresponding gateway
 - defaults to the latest release when no version is provided
 - upgrades an existing installation when the installed version is not the latest
 
-To restart the gateway automatically after install, set `MEET_HERMES_RESTART_GATEWAY=1`.
+To skip restarting the gateway after install, set `MEET_HERMES_RESTART_GATEWAY=0`.
 
 If Hermes is installed in the standard agent virtualenv, no extra Python configuration is needed:
 

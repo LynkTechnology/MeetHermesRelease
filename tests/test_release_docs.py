@@ -18,6 +18,7 @@ def test_install_script_supports_curl_latest_and_versioned_install():
     assert "hermes plugins enable" in text
     assert "platforms/meet" in text
     assert "MEET_HERMES_RESTART_GATEWAY" in text
+    assert '${MEET_HERMES_RESTART_GATEWAY:-1}' in text
     assert "hermes gateway restart" in text
 
 
@@ -59,15 +60,18 @@ def test_install_script_installs_hermes_directory_plugin_for_cli_discovery():
 def test_install_script_supports_profile_and_all_profile_targets():
     text = (ROOT / "install.sh").read_text(encoding="utf-8")
 
-    assert "Usage: install.sh [--profile <profile>|--all] [version]" in text
+    assert "Usage: install.sh [--profile <profile>] [--all] [version]" in text
     assert 'PROFILE_NAME=""' in text
-    assert 'INSTALL_ALL_PROFILES="0"' in text
-    assert 'fail "--profile and --all cannot be used together."' in text
+    assert 'PROFILE_SCOPE_REQUESTED="0"' in text
+    assert 'INSTALL_ALL_PROFILES=' not in text
+    assert 'fail "--profile and --all cannot be used together."' not in text
     assert 'profile_plugin_dir()' in text
     assert 'printf \'%s\\n\' "${HERMES_HOME_DIR}/profiles/${profile}/plugins/${PLUGIN_NAME}"' in text
     assert 'profile_names()' in text
     assert "printf '%s\\n' default" in text
     assert 'install_hermes_directory_plugin "$target"' in text
+    assert 'profile_names | while IFS= read -r profile; do' in text
+    assert 'install_profile_plugin "${PROFILE_NAME:-default}"' not in text
     assert 'hermes --profile "$profile" plugins enable "$PLUGIN_NAME"' in text
     assert 'hermes --profile "$profile" gateway restart' in text
 
@@ -77,7 +81,8 @@ def test_install_script_still_installs_profile_shim_when_package_is_current():
 
     assert 'PROFILE_SCOPE_REQUESTED="0"' in text
     assert 'PROFILE_SCOPE_REQUESTED="1"' in text
-    assert '[ "$PROFILE_SCOPE_REQUESTED" = "0" ]' in text
+    assert '[ -n "$PROFILE_NAME" ]' in text
+    assert '[ "$PROFILE_SCOPE_REQUESTED" = "0" ]' not in text
     assert "MeetHermes ${CURRENT_VERSION} is already installed; installing profile plugin shim." in text
 
 
@@ -88,7 +93,9 @@ def test_readme_uses_curl_installer_instead_of_gh_download_flow():
     assert "curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/uninstall.sh | sh" in text
     assert "sh -s -- v2026.5.18" in text
     assert "sh -s -- --profile meet-sales" in text
-    assert "sh -s -- --all" in text
+    assert "Install into every Hermes profile, including `default`:" not in text
+    assert "Install only into a named Hermes profile:" in text
+    assert "To skip restarting the gateway after install, set `MEET_HERMES_RESTART_GATEWAY=0`." in text
     assert "gh release download" not in text
 
 
