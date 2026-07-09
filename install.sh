@@ -226,9 +226,9 @@ enable_profile_plugin() {
   profile="$1"
   if command -v hermes >/dev/null 2>&1; then
     if [ "$profile" = "default" ]; then
-      hermes plugins enable "$PLUGIN_NAME"
+      hermes plugins enable "$PLUGIN_NAME" --no-allow-tool-override
     else
-      hermes --profile "$profile" plugins enable "$PLUGIN_NAME"
+      hermes --profile "$profile" plugins enable "$PLUGIN_NAME" --no-allow-tool-override
     fi
 
     if [ "${MEET_HERMES_RESTART_GATEWAY:-1}" = "0" ]; then
@@ -244,9 +244,9 @@ enable_profile_plugin() {
     fi
   else
     if [ "$profile" = "default" ]; then
-      log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes plugins enable ${PLUGIN_NAME}"
+      log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes plugins enable ${PLUGIN_NAME} --no-allow-tool-override"
     else
-      log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes --profile ${profile} plugins enable ${PLUGIN_NAME}"
+      log "Hermes command not found in PATH. Enable the plugin after Hermes is available: hermes --profile ${profile} plugins enable ${PLUGIN_NAME} --no-allow-tool-override"
     fi
   fi
 }

@@ -16,6 +16,7 @@ def test_install_script_supports_curl_latest_and_versioned_install():
     assert "pip install --no-index --no-deps" in text
     assert "meet_python_sdk-*.whl" in text
     assert "hermes plugins enable" in text
+    assert "--no-allow-tool-override" in text
     assert "platforms/meet" in text
     assert "MEET_HERMES_RESTART_GATEWAY" in text
     assert '${MEET_HERMES_RESTART_GATEWAY:-1}' in text
@@ -53,7 +54,7 @@ def test_install_script_installs_hermes_directory_plugin_for_cli_discovery():
     assert 'install_hermes_directory_plugin()' in text
     assert 'from hermes_platform_meet import check_requirements, register' in text
     assert '"$PYTHON" - "$PLUGIN_WHEEL" "$target" "$TARGET_VERSION"' in text
-    assert 'hermes plugins enable "$PLUGIN_NAME"' in text
+    assert 'hermes plugins enable "$PLUGIN_NAME" --no-allow-tool-override' in text
     assert 'hermes plugins enable meet' not in text
 
 
@@ -72,7 +73,7 @@ def test_install_script_supports_profile_and_all_profile_targets():
     assert 'install_hermes_directory_plugin "$target"' in text
     assert 'profile_names | while IFS= read -r profile; do' in text
     assert 'install_profile_plugin "${PROFILE_NAME:-default}"' not in text
-    assert 'hermes --profile "$profile" plugins enable "$PLUGIN_NAME"' in text
+    assert 'hermes --profile "$profile" plugins enable "$PLUGIN_NAME" --no-allow-tool-override' in text
     assert 'hermes --profile "$profile" gateway restart' in text
 
 
