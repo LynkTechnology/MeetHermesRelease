@@ -1,144 +1,100 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import subprocess
+import sys
+import tarfile
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_install_script_supports_curl_latest_and_versioned_install():
-    text = (ROOT / "install.sh").read_text(encoding="utf-8")
-
-    assert "need_cmd curl" in text
-    assert "Please install curl" in text
-    assert "--retry 3" in text
-    assert "api.github.com/repos/${REPO}/releases/latest" in text
-    assert 'VERSION=""' in text
-    assert "MEET_HERMES_PYTHON" in text
-    assert "meet-hermes-wheelhouse-${TAG}.tar.gz" in text
-    assert "pip install --no-index --no-deps" in text
-    assert "meet_python_sdk-*.whl" in text
-    assert "hermes plugins enable" in text
-    assert "--no-allow-tool-override" in text
-    assert "platforms/meet" in text
-    assert "MEET_HERMES_RESTART_GATEWAY" in text
-    assert '${MEET_HERMES_RESTART_GATEWAY:-1}' in text
-    assert "hermes gateway restart" in text
-
-
-def test_install_script_prefers_hermes_agent_venv_python():
-    text = (ROOT / "install.sh").read_text(encoding="utf-8")
-
-    assert 'HERMES_AGENT_PYTHON="${HOME}/.hermes/hermes-agent/venv/bin/python3"' in text
-    assert 'if [ -n "${MEET_HERMES_PYTHON:-}" ]; then' in text
-    assert 'elif [ -x "$HERMES_AGENT_PYTHON" ]; then' in text
-    assert 'PYTHON="$HERMES_AGENT_PYTHON"' in text
-    assert 'PYTHON="python3"' in text
+@pytest.fixture
+def environment(tmp_path):
+    commands = tmp_path / "bin"
+    commands.mkdir()
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    package = tmp_path / "package"
+    (package / "wheelhouse").mkdir(parents=True)
+    (package / "install_runtime.py").write_text('import json, os, sys\nwith open(os.environ["CALLS"], "a") as f: f.write(json.dumps(["payload", *sys.argv]) + "\\n")\nsys.exit(int(os.getenv("HERMES_EXIT", "0")))\n')
+    archive = assets / "meet-hermes-wheelhouse-v0.8.0.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(package / "wheelhouse", arcname="wheelhouse")
+        tar.add(package / "install_runtime.py", arcname="install_runtime.py")
+    checksum = assets / "meet-hermes-wheelhouse-v0.8.0.sha256"
+    checksum.write_text(hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name + "\n")
+    log = tmp_path / "calls.jsonl"
+    hermes = commands / "hermes"
+    hermes.write_text(f'#!{sys.executable}\nimport json, os, sys\nif sys.argv[1:]==["--run-module", "json.tool"]: print(json.dumps(json.load(sys.stdin), indent=4)); sys.exit(0)\nwith open(os.environ["CALLS"], "a") as f: f.write(json.dumps(sys.argv[1:]) + "\\n")\nsys.exit(int(os.getenv("HERMES_EXIT", "0")))\n')
+    hermes.chmod(0o755)
+    curl = commands / "curl"
+    curl.write_text(f'#!{sys.executable}\nimport os, pathlib, shutil, sys\nargs=sys.argv[1:]\nurl=next(a for a in args if a.startswith("https://"))\nif url.endswith("/latest"): print("{{\\"tag_name\\": \\"v0.8.0\\"}}")\nelse: shutil.copyfile(pathlib.Path(os.environ["ASSETS"])/url.rsplit("/",1)[-1], args[args.index("-o")+1])\n')
+    curl.chmod(0o755)
+    home = tmp_path / "home with spaces"
+    env = {"HOME": str(tmp_path), "PATH": str(commands) + os.pathsep + os.environ["PATH"], "HERMES_HOME": str(home), "ASSETS": str(assets), "CALLS": str(log)}
+    return home, log, assets, env
 
 
-def test_install_script_supports_pipless_wheel_extraction():
-    text = (ROOT / "install.sh").read_text(encoding="utf-8")
-
-    assert 'install_wheels_with_python()' in text
-    assert '"$PYTHON" -m pip --version' in text
-    assert 'pip is unavailable; installing wheels with Python zip extraction' in text
-    assert 'sysconfig.get_paths()["purelib"]' in text
-    assert 'zipfile.ZipFile(wheel)' in text
-    assert 'remove_existing("meet_sdk")' in text
-    assert 'remove_existing("hermes_platform_meet")' in text
-    assert 'hermes_agent.plugins' in text
-
-
-def test_install_script_installs_hermes_directory_plugin_for_cli_discovery():
-    text = (ROOT / "install.sh").read_text(encoding="utf-8")
-
-    assert 'PLUGIN_NAME="platforms/meet"' in text
-    assert 'PLUGIN_DIR="${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"' in text
-    assert 'install_hermes_directory_plugin()' in text
-    assert 'from hermes_platform_meet import check_requirements, register' in text
-    assert '"$PYTHON" - "$PLUGIN_WHEEL" "$target" "$TARGET_VERSION"' in text
-    assert 'hermes plugins enable "$PLUGIN_NAME" --no-allow-tool-override' in text
-    assert 'hermes plugins enable meet' not in text
+@pytest.mark.parametrize("options", [[], ["0.8.0"], ["--profile", "sales", "v0.8.0"], ["--all", "v0.8.0"]])
+def test_release_installer_verifies_archive_and_runs_bundled_payload(environment, options):
+    home, log, _, env = environment
+    result = subprocess.run(["sh", str(ROOT / "install.sh"), *options], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    runtime = [call for call in calls if call[0] == "payload"]
+    assert len(runtime) == 1
+    args = runtime[0]
+    assert Path(args[1]).name == "install_runtime.py"
+    assert args[args.index("--home") + 1] == str(home)
+    assert args[args.index("--version") + 1] == "0.8.0"
+    if "--profile" in options:
+        assert args[args.index("--profile") + 1] == "sales"
+    else:
+        assert "--profile" not in args
+    assert not Path(args[1]).exists(), "Temporary release downloads should be cleaned"
 
 
-def test_install_script_supports_profile_and_all_profile_targets():
-    text = (ROOT / "install.sh").read_text(encoding="utf-8")
-
-    assert "Usage: install.sh [--profile <profile>] [--all] [version]" in text
-    assert 'PROFILE_NAME=""' in text
-    assert 'PROFILE_SCOPE_REQUESTED="0"' in text
-    assert 'INSTALL_ALL_PROFILES=' not in text
-    assert 'fail "--profile and --all cannot be used together."' not in text
-    assert 'profile_plugin_dir()' in text
-    assert 'printf \'%s\\n\' "${HERMES_HOME_DIR}/profiles/${profile}/plugins/${PLUGIN_NAME}"' in text
-    assert 'profile_names()' in text
-    assert "printf '%s\\n' default" in text
-    assert 'install_hermes_directory_plugin "$target"' in text
-    assert 'profile_names | while IFS= read -r profile; do' in text
-    assert 'install_profile_plugin "${PROFILE_NAME:-default}"' not in text
-    assert 'hermes --profile "$profile" plugins enable "$PLUGIN_NAME" --no-allow-tool-override' in text
-    assert 'hermes --profile "$profile" gateway restart' in text
+def test_corrupt_release_checksum_never_runs_installer(environment):
+    _, log, assets, env = environment
+    (assets / "meet-hermes-wheelhouse-v0.8.0.tar.gz").write_bytes(b"corrupt")
+    result = subprocess.run(["sh", str(ROOT / "install.sh"), "0.8.0"], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not log.exists()
 
 
-def test_install_script_still_installs_profile_shim_when_package_is_current():
-    text = (ROOT / "install.sh").read_text(encoding="utf-8")
-
-    assert 'PROFILE_SCOPE_REQUESTED="0"' in text
-    assert 'PROFILE_SCOPE_REQUESTED="1"' in text
-    assert '[ -n "$PROFILE_NAME" ]' in text
-    assert '[ "$PROFILE_SCOPE_REQUESTED" = "0" ]' not in text
-    assert "MeetHermes ${CURRENT_VERSION} is already installed; installing profile plugin shim." in text
+def test_failed_hermes_install_is_reported_as_failure(environment):
+    _, _, _, env = environment
+    result = subprocess.run(["sh", str(ROOT / "install.sh"), "0.8.0"], env={**env, "HERMES_EXIT": "1"}, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "installed." not in result.stdout
 
 
-def test_readme_uses_curl_installer_instead_of_gh_download_flow():
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
-
-    assert "curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh" in text
-    assert "curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/uninstall.sh | sh" in text
-    assert "sh -s -- v2026.5.18" in text
-    assert "sh -s -- --profile meet-sales" in text
-    assert "Install into every Hermes profile, including `default`:" not in text
-    assert "Install only into a named Hermes profile:" in text
-    assert "To skip restarting the gateway after install, set `MEET_HERMES_RESTART_GATEWAY=0`." in text
-    assert "gh release download" not in text
-
-
-def test_uninstall_script_removes_plugin_and_packages():
-    text = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
-
-    assert 'PLUGIN_NAME="platforms/meet"' in text
-    assert 'PLUGIN_DIR="${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"' in text
-    assert 'hermes plugins disable "$PLUGIN_NAME"' in text
-    assert 'rm -rf "$target"' in text
-    assert '"$PYTHON" -m pip uninstall -y hermes-platform-meet meet-python-sdk' in text
-    assert 'uninstall_with_python()' in text
-    assert 'remove_existing("meet_sdk")' in text
-    assert 'remove_existing("meet_python_sdk")' in text
-    assert 'remove_existing("hermes_platform_meet")' in text
-    assert 'MEET_HERMES_RESTART_GATEWAY' in text
+def test_uninstall_one_profile_keeps_shared_wheels_and_other_profiles(environment):
+    home, log, _, env = environment
+    for profile in (home, home / "profiles/sales"):
+        (profile / "plugins/platforms/meet").mkdir(parents=True)
+    wheel = home / "plugins/.meet-wheelhouse/0.8.0/sdk.whl"
+    wheel.parent.mkdir(parents=True)
+    wheel.write_bytes(b"shared")
+    result = subprocess.run(["sh", str(ROOT / "uninstall.sh"), "--profile", "sales"], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert ["--profile", "sales", "plugins", "disable", "platforms/meet"] in calls
+    assert ["--profile", "sales", "plugins", "remove", "platforms/meet"] in calls
+    assert not any(call[:2] == ["--profile", "default"] for call in calls)
+    assert wheel.read_bytes() == b"shared"
+    assert (home / "plugins/platforms/meet").is_dir()
 
 
-def test_uninstall_script_supports_profile_and_all_profile_targets():
-    text = (ROOT / "uninstall.sh").read_text(encoding="utf-8")
-
-    assert "Usage: uninstall.sh [--profile <profile>|--all]" in text
-    assert 'PROFILE_NAME=""' in text
-    assert 'UNINSTALL_ALL_PROFILES="0"' in text
-    assert 'fail "--profile and --all cannot be used together."' in text
-    assert 'profile_plugin_dir()' in text
-    assert 'printf \'%s\\n\' "${HERMES_HOME_DIR}/plugins/${PLUGIN_NAME}"' in text
-    assert 'printf \'%s\\n\' "${HERMES_HOME_DIR}/profiles/${profile}/plugins/${PLUGIN_NAME}"' in text
-    assert 'profile_names()' in text
-    assert "printf '%s\\n' default" in text
-    assert 'uninstall_hermes_directory_plugin "$target"' in text
-    assert 'hermes --profile "$profile" plugins disable "$PLUGIN_NAME"' in text
-    assert 'hermes --profile "$profile" gateway restart' in text
-
-
-if __name__ == "__main__":
-    test_install_script_supports_curl_latest_and_versioned_install()
-    test_install_script_prefers_hermes_agent_venv_python()
-    test_install_script_supports_pipless_wheel_extraction()
-    test_install_script_installs_hermes_directory_plugin_for_cli_discovery()
-    test_install_script_supports_profile_and_all_profile_targets()
-    test_install_script_still_installs_profile_shim_when_package_is_current()
-    test_readme_uses_curl_installer_instead_of_gh_download_flow()
-    test_uninstall_script_removes_plugin_and_packages()
-    test_uninstall_script_supports_profile_and_all_profile_targets()
+def test_uninstall_failure_stops_before_removal(environment):
+    home, log, _, env = environment
+    (home / "plugins/platforms/meet").mkdir(parents=True)
+    result = subprocess.run(["sh", str(ROOT / "uninstall.sh")], env={**env, "HERMES_EXIT": "1"}, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert (home / "plugins/platforms/meet").is_dir()
+    assert all("remove" not in json.loads(line) for line in log.read_text().splitlines())
