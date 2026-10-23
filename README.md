@@ -2,7 +2,7 @@
 
 Public release channel for the Meet Hermes plugin. This repository publishes installation scripts and release artifacts; the development source is maintained separately.
 
-MeetHermes **0.8.0 requires Hermes Agent >=0.21.5** and installs dependencies through Hermes' managed Python environment.
+MeetHermes **0.8.2 requires Hermes Agent >=0.21.5** and installs dependencies through Hermes' managed Python environment. The installer is verified against Hermes **0.22.2**. Release archives older than 0.8.0 are not supported by this installer.
 
 ## Install
 
@@ -15,18 +15,20 @@ curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/ma
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- 0.8.0
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- 0.8.2
 ```
 
 Install only into an existing named profile:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales 0.8.0
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales 0.8.2
 ```
 
 The installer requires `hermes`, `python3`, `curl`, `tar`, and `shasum` or `sha256sum`. It downloads and verifies the release archive, then its bundled installer resolves `hermes --print-runtime-command` and runs the installation logic in Hermes' managed runtime. The system `python3` only starts this standard-library bootstrap. The installer saves the SDK and plugin wheels under the root Hermes home's `plugins/.meet-wheelhouse/` and creates each profile's `plugins/platforms/meet/pyproject.toml` dependency declaration. Hermes PM resolves the proposed dependencies before the old entrypoints are replaced.
 
 The plugin and SDK wheels are supplied locally rather than downloaded from PyPI. Hermes PM may still need to download missing Hermes or third-party dependencies.
+
+AnyIO >=4.14.2 is required by the 0.8.2 SDK, so the installer must resolve dependencies through Hermes PM. It never uses `pip --no-deps` or manually extracts wheels into site-packages. Download, checksum, dependency resolution, enable, and restart failures return a nonzero exit status; do not treat downloaded files alone as a successful installation.
 
 To skip restarting the gateway after install, set `MEET_HERMES_RESTART_GATEWAY=0`. To use a custom root Hermes home, set `HERMES_HOME`:
 
@@ -76,16 +78,16 @@ MEET_ALLOW_ALL_USERS=false
 
 Without `MEET_API_ENDPOINT`, the plugin uses `https://staging-meet-api.miyachat.com`. Set the endpoint explicitly for a production deployment.
 
-Use different bot tokens when running separate profile gateways concurrently. A default gateway can serve multiple profiles; restart it once after installing all profiles.
+Use a different bot token for each concurrently running account. On current Hermes, one host gateway serves multiple profiles; named profiles do not require separate background service installations. The installer restarts the host once after installing all profiles, not once per profile.
 
 ## Manual Install
 
 Download the release archive and checksum, then run:
 
 ```bash
-shasum -a 256 -c meet-hermes-wheelhouse-v0.8.0.sha256
-tar -xzf meet-hermes-wheelhouse-v0.8.0.tar.gz
-python3 install_runtime.py --wheelhouse wheelhouse --version 0.8.0
+shasum -a 256 -c meet-hermes-wheelhouse-v0.8.2.sha256
+tar -xzf meet-hermes-wheelhouse-v0.8.2.tar.gz
+python3 install_runtime.py --wheelhouse wheelhouse --version 0.8.2
 ```
 
 Add `--profile meet-sales`, `--no-enable`, or `--no-restart` as needed. Unpacked files may be removed after successful installation because the installer preserves the wheel sources under the Hermes home.

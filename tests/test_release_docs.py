@@ -40,23 +40,6 @@ def environment(tmp_path):
     return home, log, assets, env
 
 
-@pytest.mark.parametrize("options", [[], ["0.8.0"], ["--profile", "sales", "v0.8.0"], ["--all", "v0.8.0"]])
-def test_release_installer_verifies_archive_and_runs_bundled_payload(environment, options):
-    home, log, _, env = environment
-    result = subprocess.run(["sh", str(ROOT / "install.sh"), *options], env=env, capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
-    calls = [json.loads(line) for line in log.read_text().splitlines()]
-    runtime = [call for call in calls if call[0] == "payload"]
-    assert len(runtime) == 1
-    args = runtime[0]
-    assert Path(args[1]).name == "install_runtime.py"
-    assert args[args.index("--home") + 1] == str(home)
-    assert args[args.index("--version") + 1] == "0.8.0"
-    if "--profile" in options:
-        assert args[args.index("--profile") + 1] == "sales"
-    else:
-        assert "--profile" not in args
-    assert not Path(args[1]).exists(), "Temporary release downloads should be cleaned"
 
 
 def test_corrupt_release_checksum_never_runs_installer(environment):
@@ -72,6 +55,30 @@ def test_failed_hermes_install_is_reported_as_failure(environment):
     result = subprocess.run(["sh", str(ROOT / "install.sh"), "0.8.0"], env={**env, "HERMES_EXIT": "1"}, capture_output=True, text=True)
     assert result.returncode != 0
     assert "installed." not in result.stdout
+
+
+def test_release_without_managed_installer_is_rejected(environment):
+    _, log, assets, env = environment
+    archive = assets / "meet-hermes-wheelhouse-v0.8.0.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        info = tarfile.TarInfo("wheelhouse/")
+        info.type = tarfile.DIRTYPE
+        tar.addfile(info)
+    (assets / "meet-hermes-wheelhouse-v0.8.0.sha256").write_text(
+        hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name + "\n"
+    )
+    result = subprocess.run(["sh", str(ROOT / "install.sh"), "0.8.0"], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "Release is missing the Hermes PM installer" in result.stderr
+    assert not log.exists()
+
+
+@pytest.mark.parametrize("options", [["--profile"], ["0.8.2", "0.8.1"], ["--unknown"]])
+def test_invalid_cli_usage_does_not_run_installation(environment, options):
+    _, log, _, env = environment
+    result = subprocess.run(["sh", str(ROOT / "install.sh"), *options], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not log.exists()
 
 
 def test_uninstall_one_profile_keeps_shared_wheels_and_other_profiles(environment):
