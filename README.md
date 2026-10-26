@@ -2,7 +2,7 @@
 
 Public release channel for the Meet Hermes plugin. This repository publishes installation scripts and release artifacts; the development source is maintained separately.
 
-MeetHermes **0.8.2 requires Hermes Agent >=0.21.5** and installs dependencies through Hermes' managed Python environment. The installer is verified against Hermes **0.22.2**. Release archives older than 0.8.0 are not supported by this installer.
+MeetHermes **0.9.0 requires Hermes Agent >=0.21.5** and installs dependencies through Hermes' managed Python environment. It adds native text and file sending through `meet_send_message`. The installer is verified against Hermes **0.22.2**. Release archives older than 0.8.0 are not supported by this installer.
 
 ## Install
 
@@ -15,13 +15,13 @@ curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/ma
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- 0.8.2
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- 0.9.0
 ```
 
 Install only into an existing named profile:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales 0.8.2
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales 0.9.0
 ```
 
 The installer requires `hermes`, `python3`, `curl`, `tar`, and `shasum` or `sha256sum`. It downloads and verifies the release archive, then its bundled installer resolves `hermes --print-runtime-command` and runs the installation logic in Hermes' managed runtime. The system `python3` only starts this standard-library bootstrap. The installer saves the SDK and plugin wheels under the root Hermes home's `plugins/.meet-wheelhouse/` and creates each profile's `plugins/platforms/meet/pyproject.toml` dependency declaration. Hermes PM resolves the proposed dependencies before the old entrypoints are replaced.
@@ -64,6 +64,18 @@ curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/ma
 
 The uninstaller uses Hermes' plugin commands, allowing PM to retain dependencies required by remaining profiles. The shared wheel cache remains available for those profiles and future reinstalls. Set `MEET_HERMES_RESTART_GATEWAY=1` to restart after removal.
 
+## Native Text and File Sending
+
+The plugin provides `meet_send_message` in the `meet` toolset, without requiring `lxcli` or browser tools. Use an explicit configured account and user/channel ID:
+
+```json
+{"target":"sky/channel/3080","message":"附件说明","files":["/absolute/path/report.md"]}
+```
+
+Supply `message`, `files`, or both. `files` accepts existing absolute or `~/` local paths; Hermes' path safety policy and the selected account's size limit apply. Omit `files` for text-only sends. Multi-file sends are not atomic; avoid blindly retrying the entire batch after a partial failure.
+
+Authorized users of a shared profile share its configured bot sending authority. `allowed_chats` controls inbound access, not outbound sends. Use separate profiles when users must not share that authority. Hermes toolset opt-outs are preserved; enable `meet` for the calling platform if it was explicitly disabled.
+
 ## Configure
 
 Set the token and optional settings in each selected profile's `.env`:
@@ -85,9 +97,9 @@ Use a different bot token for each concurrently running account. On current Herm
 Download the release archive and checksum, then run:
 
 ```bash
-shasum -a 256 -c meet-hermes-wheelhouse-v0.8.2.sha256
-tar -xzf meet-hermes-wheelhouse-v0.8.2.tar.gz
-python3 install_runtime.py --wheelhouse wheelhouse --version 0.8.2
+shasum -a 256 -c meet-hermes-wheelhouse-v0.9.0.sha256
+tar -xzf meet-hermes-wheelhouse-v0.9.0.tar.gz
+python3 install_runtime.py --wheelhouse wheelhouse --version 0.9.0
 ```
 
 Add `--profile meet-sales`, `--no-enable`, or `--no-restart` as needed. Unpacked files may be removed after successful installation because the installer preserves the wheel sources under the Hermes home.
