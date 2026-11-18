@@ -94,6 +94,8 @@ Without `MEET_API_ENDPOINT`, the plugin uses `https://staging-meet-api.miyachat.
 
 Hermes pairing and gateway-wide grants such as `GATEWAY_ALLOWED_USERS` and `GATEWAY_ALLOW_ALL_USERS` are independent of the Meet account allowlist. On Hermes 0.23.2, those grants can bypass the adapter's reauthorization of previously admitted durable turns after an account policy is tightened. Avoid those grants when revocation of queued turns must be governed strictly by each Meet account's policy.
 
+Enabled account IDs must not map to the same environment-variable prefix (for example, `bot-a` and `bot_a` both map to `MEET_BOT_A`). After reconnecting, renaming accounts, changing the default account, or changing any account's endpoint or credentials conservatively invalidates all pending durable turns for that connector. An older unqualified turn is accepted only while both the connected and current configurations contain exactly one account.
+
 Use a different bot token for each concurrently running account. On current Hermes, one host gateway serves multiple profiles; named profiles do not require separate background service installations. The installer restarts the host once after installing all profiles, not once per profile.
 
 ## Manual Install
