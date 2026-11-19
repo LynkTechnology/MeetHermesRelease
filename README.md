@@ -2,7 +2,7 @@
 
 Public release channel for the Meet Hermes plugin. This repository publishes installation scripts and release artifacts; the development source is maintained separately.
 
-MeetHermes **0.9.1 requires Hermes Agent >=0.21.5** and installs dependencies through Hermes' managed Python environment. It fixes inbound authorization revalidation, native sending, and account lock cleanup compatibility with Hermes 0.23.2. The plugin provides native text and file sending through `meet_send_message`. Release archives older than 0.8.0 are not supported by this installer.
+MeetHermes **0.10.0 requires Hermes Agent >=0.21.5** and installs dependencies through Hermes' managed Python environment. It supports an account-specific inbound DM sender allowlist and provides native text and file sending through `meet_send_message`. Release archives older than 0.8.0 are not supported by this installer.
 
 ## Install
 
@@ -15,13 +15,13 @@ curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/ma
 Install a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- 0.9.1
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- 0.10.0
 ```
 
 Install only into an existing named profile:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales 0.9.1
+curl -fsSL https://raw.githubusercontent.com/LynkTechnology/MeetHermesRelease/main/install.sh | sh -s -- --profile meet-sales 0.10.0
 ```
 
 The installer requires `hermes`, `python3`, `curl`, `tar`, and `shasum` or `sha256sum`. It downloads and verifies the release archive, then its bundled installer resolves `hermes --print-runtime-command` and runs the installation logic in Hermes' managed runtime. The system `python3` only starts this standard-library bootstrap. The installer saves the SDK and plugin wheels under the root Hermes home's `plugins/.meet-wheelhouse/` and creates each profile's `plugins/platforms/meet/pyproject.toml` dependency declaration. Hermes PM resolves the proposed dependencies before the old entrypoints are replaced.
@@ -94,6 +94,8 @@ Without `MEET_API_ENDPOINT`, the plugin uses `https://staging-meet-api.miyachat.
 
 Hermes pairing and gateway-wide grants such as `GATEWAY_ALLOWED_USERS` and `GATEWAY_ALLOW_ALL_USERS` are independent of the Meet account allowlist. On Hermes 0.23.2, those grants can bypass the adapter's reauthorization of previously admitted durable turns after an account policy is tightened. Avoid those grants when revocation of queued turns must be governed strictly by each Meet account's policy.
 
+Set `meet.accounts.<account>.dm_allowed_users: [553, "user:554"]` in YAML to restrict inbound DMs to those users in addition to `allowed_chats`. A top-level `meet.dm_allowed_users` acts as a default for accounts without their own key; account lists replace that default rather than merging. Omitting the key with no default preserves legacy DM behavior; `[]`, `null`, or a malformed list denies all DMs for the affected account. This filter applies at intake even when gateway grants exist, but does not itself grant gateway access or affect group and outbound messages. Keep the durable-turn limitation above in mind when changing policies.
+
 Enabled account IDs must not map to the same environment-variable prefix (for example, `bot-a` and `bot_a` both map to `MEET_BOT_A`). After reconnecting, renaming accounts, changing the default account, or changing any account's endpoint or credentials conservatively invalidates all pending durable turns for that connector. An older unqualified turn is accepted only while both the connected and current configurations contain exactly one account.
 
 Use a different bot token for each concurrently running account. On current Hermes, one host gateway serves multiple profiles; named profiles do not require separate background service installations. The installer restarts the host once after installing all profiles, not once per profile.
@@ -103,9 +105,9 @@ Use a different bot token for each concurrently running account. On current Herm
 Download the release archive and checksum, then run:
 
 ```bash
-shasum -a 256 -c meet-hermes-wheelhouse-v0.9.1.sha256
-tar -xzf meet-hermes-wheelhouse-v0.9.1.tar.gz
-python3 install_runtime.py --wheelhouse wheelhouse --version 0.9.1
+shasum -a 256 -c meet-hermes-wheelhouse-v0.10.0.sha256
+tar -xzf meet-hermes-wheelhouse-v0.10.0.tar.gz
+python3 install_runtime.py --wheelhouse wheelhouse --version 0.10.0
 ```
 
 Add `--profile meet-sales`, `--no-enable`, or `--no-restart` as needed. Unpacked files may be removed after successful installation because the installer preserves the wheel sources under the Hermes home.
